@@ -6,12 +6,14 @@ from dotenv import load_dotenv
 import os
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
 
 
 
 class BusinessNotificationService:
     def __init__(self,port):
         self.port = port
+        load_dotenv()
         self.app = Flask(__name__)
         logging.basicConfig(
             level=logging.DEBUG, 
@@ -32,15 +34,26 @@ class BusinessNotificationService:
                 body = request.get_json()
                 headers = request.headers
                 logging.info("Business notification received")
+                logging.debug("Payload business notification : " + str(body))
                 customerId = body['Body']['Key']['customerId']
                 logging.info("Y2 Webservice start call")
                 customerDetails = self.y2CustomerService.getCustomerById(customerId)
+                logging.debug("Customer details received : " + str(customerDetails))
                 logging.info("Y2 Webservice end call")
                 logging.info("Start Mapping")
                 profileDetails = self.mapping.mappingProfile(jsonY2=customerDetails)
+                logging.debug("Profile Mapping : " + str(profileDetails))
                 logging.info("End mapping")
                 logging.info("Start Klaviyo webservice call")
-                self.klaviyo.createProfile(payload=profileDetails)
+                profileReturn = self.klaviyo.createProfile(payload=profileDetails)
+                #if profile already exists in Klaviyo we update klaviyo
+                try:
+                    if str(profileReturn['errors'][0]['code']) == 'duplicate_profile':
+                        print(profileReturn['errors'][0]['meta']['duplicate_profile_id'])
+                    else:
+                        logging.debug('Following code returned by Klaviyo: ' + str(profileReturn))
+                except Exception as e:
+                    logging.debug('An exception occured : ' + str(e))
                 logging.info("End Klaviyo webservice call")
                 return jsonify(body), 200
             except Exception as e:
